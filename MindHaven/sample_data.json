@@ -1,0 +1,191 @@
+{
+    "users": [
+        {
+            "name": "John Smith",
+            "email": "john.smith@example.com",
+            "password": "hashed_password_1",
+            "preferences": {
+                "theme": "dark",
+                "notifications": true,
+                "language": "en"
+            }
+        },
+        {
+            "name": "Emma Wilson",
+            "email": "emma.wilson@example.com",
+            "password": "hashed_password_2",
+            "preferences": {
+                "theme": "light",
+                "notifications": true,
+                "language": "en"
+            }
+        },
+        {
+            "name": "Michael Chen",
+            "email": "michael.chen@example.com",
+            "password": "hashed_password_3",
+            "preferences": {
+                "theme": "auto",
+                "notifications": false,
+                "language": "zh"
+            }
+        }
+    ],
+    "mood_logs": [
+        {
+            "user_id": "USER_ID_1",
+            "date": "2024-02-20T10:00:00Z",
+            "mood": "happy",
+            "notes": "Had a great day at work!",
+            "score": 8
+        },
+        {
+            "user_id": "USER_ID_1",
+            "date": "2024-02-21T10:00:00Z",
+            "mood": "neutral",
+            "notes": "Regular day, nothing special",
+            "score": 5
+        },
+        {
+            "user_id": "USER_ID_2",
+            "date": "2024-02-21T09:00:00Z",
+            "mood": "excited",
+            "notes": "Got a promotion!",
+            "score": 9
+        }
+    ],
+    "journal_entries": [
+        {
+            "user_id": "USER_ID_1",
+            "content": "Today I reflected on my goals for the year. I feel like I'm making good progress...",
+            "created_at": "2024-02-20T15:30:00Z"
+        },
+        {
+            "user_id": "USER_ID_2",
+            "content": "Dear diary, today was a breakthrough day at work...",
+            "created_at": "2024-02-21T20:00:00Z"
+        }
+    ],
+    "blog_posts": [
+        {
+            "user_id": "USER_ID_1",
+            "title": "My Journey to Mindfulness",
+            "content": "It all started three months ago when I decided to take control of my mental health...",
+            "is_anonymous": false,
+            "created_at": "2024-02-15T12:00:00Z"
+        },
+        {
+            "user_id": "USER_ID_2",
+            "title": "Dealing with Anxiety",
+            "content": "I wanted to share my experience with anxiety and how I've learned to cope...",
+            "is_anonymous": true,
+            "created_at": "2024-02-18T14:30:00Z"
+        }
+    ],
+    "comments": [
+        {
+            "post_id": "BLOG_POST_ID_1",
+            "user_id": "USER_ID_2",
+            "content": "Thank you for sharing your journey! Very inspiring.",
+            "created_at": "2024-02-15T14:00:00Z"
+        },
+        {
+            "post_id": "BLOG_POST_ID_2",
+            "user_id": "USER_ID_3",
+            "content": "This resonates with me so much. Thank you for being vulnerable.",
+            "created_at": "2024-02-18T16:00:00Z"
+        }
+    ],
+    "exercises": [
+        {
+            "user_id": "USER_ID_1",
+            "name": "Morning Meditation",
+            "type": "mindfulness",
+            "duration": 15,
+            "completed": true,
+            "created_at": "2024-02-20T07:00:00Z"
+        },
+        {
+            "user_id": "USER_ID_1",
+            "name": "Evening Yoga",
+            "type": "physical",
+            "duration": 30,
+            "completed": false,
+            "created_at": "2024-02-20T18:00:00Z"
+        }
+    ],
+    "challenges": [
+        {
+            "user_id": "USER_ID_1",
+            "name": "30 Days of Gratitude",
+            "description": "Write down three things you're grateful for each day",
+            "type": "mindfulness",
+            "duration": 30,
+            "start_date": "2024-02-01T00:00:00Z",
+            "end_date": "2024-03-01T00:00:00Z",
+            "status": "in_progress"
+        },
+        {
+            "user_id": "USER_ID_2",
+            "name": "Meditation Marathon",
+            "description": "Meditate for at least 10 minutes every day",
+            "type": "meditation",
+            "duration": 7,
+            "start_date": "2024-02-15T00:00:00Z",
+            "end_date": "2024-02-22T00:00:00Z",
+            "status": "completed"
+        }
+    ],
+    "chat_logs": [
+        {
+            "user_id": "USER_ID_1",
+            "message": "I'm feeling anxious about my presentation tomorrow",
+            "sender": "user",
+            "created_at": "2024-02-20T19:00:00Z"
+        },
+        {
+            "user_id": "USER_ID_1",
+            "message": "Let's break this down. What specific aspects of the presentation are causing anxiety?",
+            "sender": "ai",
+            "created_at": "2024-02-20T19:00:05Z"
+        }
+    ],
+    "happy_user_tracking": [
+        {
+            "user_id": "USER_ID_1",
+            "date": "2024-02-20T00:00:00Z",
+            "trigger": "achievement",
+            "context": "Completed a week-long meditation streak"
+        },
+        {
+            "user_id": "USER_ID_2",
+            "date": "2024-02-21T00:00:00Z",
+            "trigger": "social",
+            "context": "Received supportive comments on blog post"
+        }
+    ],
+    "mood_summaries": [
+        {
+            "user_id": "USER_ID_1",
+            "start_date": "2024-02-14T00:00:00Z",
+            "end_date": "2024-02-20T00:00:00Z",
+            "summary": {
+                "average_score": 7.5,
+                "dominant_mood": "happy",
+                "improvement_areas": ["sleep", "exercise"],
+                "highlights": ["Completed meditation challenge", "Started journaling"]
+            }
+        },
+        {
+            "user_id": "USER_ID_2",
+            "start_date": "2024-02-14T00:00:00Z",
+            "end_date": "2024-02-20T00:00:00Z",
+            "summary": {
+                "average_score": 6.8,
+                "dominant_mood": "neutral",
+                "improvement_areas": ["stress management"],
+                "highlights": ["Started therapy sessions", "Regular exercise routine"]
+            }
+        }
+    ]
+} 
