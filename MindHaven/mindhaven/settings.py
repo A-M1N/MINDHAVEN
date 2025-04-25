@@ -122,15 +122,14 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 MONGODB_HOST = 'mongodb+srv://mbakry484:MindHaven123@cluster0.avclj.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
 MONGODB_NAME = "mindhaven"
 
-# Django requires a default database even if we're using MongoDB
+# Using SQLite for Django's ORM
 DATABASES = {
     'default': {
-        'ENGINE': 'djongo',
-        'NAME': 'mindhaven',
-        'ENFORCE_SCHEMA': False,
-        'CLIENT': {
-           'host': 'mongodb+srv://mbakry484:MindHaven123@cluster0.avclj.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
-           
-        }
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# Connect to MongoDB using pymongo directly in models.py
+# This approach allows direct MongoDB operations without djongo
+# MongoDB connection will be handled in db_connection.py and individual model files
