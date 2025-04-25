@@ -14,12 +14,18 @@ const Home = () => {
     router.push("/profile");
   };
 
+  const handleMoodTrackerPress = () => {
+    router.push("/mood-tracker");
+  };
+
   return (
     <View style={styles.container}>
       <Header onProfilePress={handleProfilePress} />
       <Text style={styles.welcomeText}>Welcome To MindHaven</Text>
       <ButtonContainer />
-      <MoodTracker />
+      <TouchableOpacity onPress={handleMoodTrackerPress}>
+        <MoodTracker />
+      </TouchableOpacity>
       <Text style={styles.servicesTitle}>Services</Text>
       <ServicesContainer onServicePress={handleServicePress} />
     </View>
