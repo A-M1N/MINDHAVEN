@@ -21,12 +21,12 @@ from django.urls import include
 from core.views import login
 from core.views import *
 from django.urls import path
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("core.api")),
-
-
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 #hello

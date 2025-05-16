@@ -7,6 +7,12 @@ urlpatterns = [
     path("add_user/", add_user, name="add_user"),
     path("get_user/<str:user_id>/", get_user, name="get_user"),
     path("get_all/", get_all, name="get_all"),
+    path(
+        "update_default_profile_images/",
+        update_default_profile_images,
+        name="update_default_profile_images",
+    ),
+    path("upload_profile_image/", upload_profile_image, name="upload_profile_image"),
     # MoodLogs endpoints
     path("add_mood_log/", add_mood_log, name="add_mood_log"),
     path(
@@ -22,18 +28,19 @@ urlpatterns = [
         name="get_user_journal_entries",
     ),
     # Blog posts endpoints
-    path('get_blog_posts/', get_blog_posts, name='get_blog_posts'),
-    path('create_blog_post/', create_blog_post, name='create_blog_post'),
-    path('toggle_like/<str:post_id>/',toggle_like, name='toggle_like'),
-   
+    path("get_blog_posts/", get_blog_posts, name="get_blog_posts"),
+    path("create_blog_post/", create_blog_post, name="create_blog_post"),
+    path("toggle_like/<str:post_id>/", toggle_like, name="toggle_like"),
     # Comments endpoints
     path("add_comment/", add_comment, name="add_comment"),
     path(
         "get_post_comments/<str:post_id>/", get_post_comments, name="get_post_comments"
     ),
-    path('toggle_comment_like/<str:comment_id>/', toggle_comment_like, name='toggle_comment_like'),
-
-   
+    path(
+        "toggle_comment_like/<str:comment_id>/",
+        toggle_comment_like,
+        name="toggle_comment_like",
+    ),
     # Exercises endpoints
     path("add_exercise/", add_exercise, name="add_exercise"),
     path(
@@ -69,5 +76,5 @@ urlpatterns = [
         get_user_mood_summaries,
         name="get_user_mood_summaries",
     ),
-    
 ]
+

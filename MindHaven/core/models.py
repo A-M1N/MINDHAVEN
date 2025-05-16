@@ -59,6 +59,9 @@ class BaseCollection:
 # =====================
 class Users(BaseCollection):
     collection_name = "users"
+    DEFAULT_PROFILE_IMAGE = (
+        "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
+    )
 
     @classmethod
     def create_user(cls, name, email, password, preferences=None):
@@ -67,7 +70,8 @@ class Users(BaseCollection):
             name=name,
             email=email,
             password=hashed_password,
-            preferences=preferences or {}
+            preferences=preferences or {},
+            profile_image=cls.DEFAULT_PROFILE_IMAGE,
         )
 
     @classmethod
@@ -76,7 +80,26 @@ class Users(BaseCollection):
 
     @classmethod
     def verify_password(cls, user, raw_password):
-        return user and "password" in user and check_password(raw_password, user["password"])
+        return (
+            user
+            and "password" in user
+            and check_password(raw_password, user["password"])
+        )
+
+    @classmethod
+    def update_profile_image(cls, user_id, image_url):
+        if isinstance(user_id, str):
+            user_id = ObjectId(user_id)
+        return cls.update(user_id, {"profile_image": image_url})
+
+    @classmethod
+    def set_default_profile_images(cls):
+        """Set default profile image for all users who don't have one."""
+        result = cls.get_collection().update_many(
+            {"profile_image": {"$exists": False}},
+            {"$set": {"profile_image": cls.DEFAULT_PROFILE_IMAGE}},
+        )
+        return result.modified_count
 
 
 # =====================
@@ -89,7 +112,9 @@ class MoodLogs(BaseCollection):
     def create_log(cls, user_id, date, mood, notes="", score=None):
         if isinstance(user_id, str):
             user_id = ObjectId(user_id)
-        return cls.create(user_id=user_id, date=date, mood=mood, notes=notes, score=score)
+        return cls.create(
+            user_id=user_id, date=date, mood=mood, notes=notes, score=score
+        )
 
     @classmethod
     def find_by_user(cls, user_id):
@@ -115,14 +140,15 @@ class JournalEntries(BaseCollection):
 # Blog Posts
 # =====================
 
+
 class BlogPosts(BaseCollection):
-    collection_name = 'blog_posts'  # Use collection_name instead of collection
+    collection_name = "blog_posts"  # Use collection_name instead of collection
 
     @classmethod
     def create_post(cls, user_id, title, content, is_anonymous=False):
         user = Users.find_by_id(user_id)
         user_name = user.get("name", "Anonymous") if user else "Anonymous"
-        
+
         post_data = {
             "user_id": ObjectId(user_id),
             "title": title,
@@ -130,7 +156,7 @@ class BlogPosts(BaseCollection):
             "is_anonymous": is_anonymous,
             "author_name": "Anonymous" if is_anonymous else user_name,
             "likes": [],
-            "like_count": 0
+            "like_count": 0,
             # No need to add created_at, BaseCollection.create() will add it
         }
         return cls.create(**post_data)  # Use the create method from BaseCollection
@@ -150,28 +176,29 @@ class BlogPosts(BaseCollection):
 
         user_id_obj = ObjectId(user_id)
         likes = post.get("likes", [])
-        
+
         # Check if user already liked
         if user_id_obj in [like["user_id"] for like in likes]:
             # Remove like
-            cls.update(post_id, {
-                "likes": [like for like in likes if like["user_id"] != user_id_obj],
-                "like_count": len(likes) - 1
-            })
+            cls.update(
+                post_id,
+                {
+                    "likes": [like for like in likes if like["user_id"] != user_id_obj],
+                    "like_count": len(likes) - 1,
+                },
+            )
             return False
         else:
             # Add like
             new_like = {"user_id": user_id_obj, "created_at": datetime.utcnow()}
             likes.append(new_like)
-            cls.update(post_id, {
-                "likes": likes,
-                "like_count": len(likes)
-            })
+            cls.update(post_id, {"likes": likes, "like_count": len(likes)})
             return True
 
     @classmethod
     def get_user_posts(cls, user_id):
         return cls.find(user_id=ObjectId(user_id))
+
 
 # =====================
 # Comments
@@ -184,18 +211,18 @@ class Comments(BaseCollection):
         post_id = ObjectId(post_id) if isinstance(post_id, str) else post_id
         user_id = ObjectId(user_id) if isinstance(user_id, str) else user_id
         user = db.users.find_one({"_id": user_id})
-            # Get user information
-       
+        # Get user information
+
         user_name = user.get("name", "Anonymous") if user else "Anonymous"
         comment_doc = {
-        "post_id": post_id,
-        "user_id": user_id,
-        "content": content,
-        "created_at": datetime.utcnow(),
-        "user_name": user_name,
-        "user_image": user.get("profile_image", None),
-        "likes": [],
-        "like_count": 0
+            "post_id": post_id,
+            "user_id": user_id,
+            "content": content,
+            "created_at": datetime.utcnow(),
+            "user_name": user_name,
+            "user_image": user.get("profile_image", None),
+            "likes": [],
+            "like_count": 0,
         }
         result = cls.get_collection().insert_one(comment_doc)
         return result, comment_doc
@@ -211,23 +238,32 @@ class Comments(BaseCollection):
             post_id = ObjectId(post_id) if isinstance(post_id, str) else post_id
             user_id = ObjectId(user_id) if isinstance(user_id, str) else user_id
 
-            post = cls.get_collection().find_one({
-                "_id": post_id,
-                "likes": {"$elemMatch": {"user_id": user_id}}
-            })
+            post = cls.get_collection().find_one(
+                {"_id": post_id, "likes": {"$elemMatch": {"user_id": user_id}}}
+            )
 
             if post:
                 cls.get_collection().update_one(
                     {"_id": post_id},
-                    {"$pull": {"likes": {"user_id": user_id}}, "$inc": {"like_count": -1}}
+                    {
+                        "$pull": {"likes": {"user_id": user_id}},
+                        "$inc": {"like_count": -1},
+                    },
                 )
                 liked = False
             else:
                 cls.get_collection().update_one(
                     {"_id": post_id},
-                    {"$push": {"likes": {"user_id": user_id, "created_at": datetime.utcnow()}},
-                     "$inc": {"like_count": 1}},
-                    upsert=True
+                    {
+                        "$push": {
+                            "likes": {
+                                "user_id": user_id,
+                                "created_at": datetime.utcnow(),
+                            }
+                        },
+                        "$inc": {"like_count": 1},
+                    },
+                    upsert=True,
                 )
                 liked = True
 
@@ -242,10 +278,14 @@ class Comments(BaseCollection):
         try:
             post_id = ObjectId(post_id) if isinstance(post_id, str) else post_id
             post = cls.get_collection().find_one({"_id": post_id})
-            return {
-                "like_count": post.get("like_count", 0),
-                "likes": post.get("likes", [])
-            } if post else {"like_count": 0, "likes": []}
+            return (
+                {
+                    "like_count": post.get("like_count", 0),
+                    "likes": post.get("likes", []),
+                }
+                if post
+                else {"like_count": 0, "likes": []}
+            )
         except Exception as e:
             raise Exception(f"Error getting likes: {str(e)}")
 
@@ -259,7 +299,13 @@ class Exercises(BaseCollection):
     @classmethod
     def create_exercise(cls, user_id, name, type, duration, completed=False):
         user_id = ObjectId(user_id) if isinstance(user_id, str) else user_id
-        return cls.create(user_id=user_id, name=name, type=type, duration=duration, completed=completed)
+        return cls.create(
+            user_id=user_id,
+            name=name,
+            type=type,
+            duration=duration,
+            completed=completed,
+        )
 
 
 # =====================
@@ -269,7 +315,17 @@ class Challenges(BaseCollection):
     collection_name = "challenges"
 
     @classmethod
-    def create_challenge(cls, user_id, name, description, type, duration, start_date, end_date, status="pending"):
+    def create_challenge(
+        cls,
+        user_id,
+        name,
+        description,
+        type,
+        duration,
+        start_date,
+        end_date,
+        status="pending",
+    ):
         user_id = ObjectId(user_id) if isinstance(user_id, str) else user_id
         return cls.create(
             user_id=user_id,
@@ -279,7 +335,7 @@ class Challenges(BaseCollection):
             duration=duration,
             start_date=start_date,
             end_date=end_date,
-            status=status
+            status=status,
         )
 
 
