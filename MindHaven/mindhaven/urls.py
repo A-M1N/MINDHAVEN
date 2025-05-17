@@ -29,4 +29,4 @@ urlpatterns = [
     path("api/", include("core.api")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
-#hello
+# hello

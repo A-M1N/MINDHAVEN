@@ -77,4 +77,3 @@ urlpatterns = [
         name="get_user_mood_summaries",
     ),
 ]
-

@@ -29,6 +29,10 @@ def get_blog_posts(request):
                     if user
                     else Users.DEFAULT_PROFILE_IMAGE
                 )
+                # Count comments for this post
+                comment_count = Comments.get_collection().count_documents(
+                    {"post_id": post["_id"]}
+                )
 
                 post_data = {
                     "_id": str(post["_id"]),
@@ -39,10 +43,11 @@ def get_blog_posts(request):
                     "author_name": (
                         "Anonymous" if post.get("is_anonymous") else author_name
                     ),
-                    "author_image": (
-                        "Anonymous" if post.get("is_anonymous") else profile_image
+                    "author_profile_image": (
+                        None if post.get("is_anonymous") else profile_image
                     ),
                     "like_count": post.get("like_count", 0),
+                    "comment_count": comment_count,
                     "created_at": post["created_at"].isoformat(),
                     "likes": [
                         {
@@ -218,16 +223,16 @@ def upload_profile_image(request):
     if request.method == "POST":
         try:
             print("\n=== Starting Profile Image Upload ===")
-            
+
             # Debug request information
             print("Content Type:", request.content_type)
             print("POST data:", dict(request.POST))
             print("FILES data:", dict(request.FILES))
-            
+
             # Get user_id from POST data
             user_id = request.POST.get("user_id")
             print(f"User ID from POST: {user_id}")
-            
+
             # Get image from FILES
             image = request.FILES.get("image")
             print(f"Image from FILES: {image}")
@@ -235,7 +240,7 @@ def upload_profile_image(request):
                 print(f"Image name: {image.name}")
                 print(f"Image size: {image.size}")
                 print(f"Image content type: {image.content_type}")
-            
+
             if not user_id:
                 return JsonResponse({"error": "Missing user_id"}, status=400)
             if not image:
@@ -243,13 +248,13 @@ def upload_profile_image(request):
 
             # Get absolute paths
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            media_root = os.path.join(base_dir, 'media')
+            media_root = os.path.join(base_dir, "media")
             upload_dir = os.path.join(media_root, "profile_images")
-            
+
             print(f"Base directory: {base_dir}")
             print(f"Media root path: {media_root}")
             print(f"Upload directory path: {upload_dir}")
-            
+
             # Ensure directories exist
             try:
                 os.makedirs(media_root, exist_ok=True)
@@ -257,34 +262,39 @@ def upload_profile_image(request):
                 print("Directories created/verified successfully")
             except Exception as e:
                 print(f"Error creating directories: {str(e)}")
-                return JsonResponse({"error": f"Failed to create upload directory: {str(e)}"}, status=500)
-            
+                return JsonResponse(
+                    {"error": f"Failed to create upload directory: {str(e)}"},
+                    status=500,
+                )
+
             # Generate filename and path
             filename = f"{user_id}_{image.name}"
             image_path = os.path.join(upload_dir, filename)
-            
+
             print(f"Attempting to save image to: {image_path}")
-            
+
             # Save the file with error handling
             try:
                 with open(image_path, "wb+") as destination:
                     for chunk in image.chunks():
                         destination.write(chunk)
                 print(f"File saved successfully to {image_path}")
-                
+
                 # Verify file exists and size
                 if not os.path.exists(image_path):
                     raise Exception("File was not saved successfully")
-                    
+
                 file_size = os.path.getsize(image_path)
                 print(f"Saved file size: {file_size} bytes")
-                
+
                 if file_size == 0:
                     raise Exception("File was saved but is empty")
-                    
+
             except Exception as e:
                 print(f"Error saving file: {str(e)}")
-                return JsonResponse({"error": f"Failed to save image: {str(e)}"}, status=500)
+                return JsonResponse(
+                    {"error": f"Failed to save image: {str(e)}"}, status=500
+                )
 
             # Build the absolute URL to serve the image
             image_url = f"http://127.0.0.1:8000/media/profile_images/{filename}"
@@ -295,34 +305,39 @@ def upload_profile_image(request):
                 result = Users.update_profile_image(user_id, image_url)
                 if not result.acknowledged:
                     raise Exception("MongoDB update was not acknowledged")
-                
+
                 # Verify the update was successful
                 updated_user = Users.find_by_id(user_id)
-                if updated_user and updated_user.get('profile_image') == image_url:
+                if updated_user and updated_user.get("profile_image") == image_url:
                     print("User profile successfully updated with new image URL")
                 else:
                     raise Exception("Failed to verify user profile update")
-                
+
             except Exception as e:
                 print(f"Error updating user profile: {str(e)}")
-                return JsonResponse({"error": f"Failed to update user profile: {str(e)}"}, status=500)
+                return JsonResponse(
+                    {"error": f"Failed to update user profile: {str(e)}"}, status=500
+                )
 
             print("=== Profile Image Upload Complete ===\n")
-            return JsonResponse({
-                "profile_image": f"/media/profile_images/{filename}",
-                "success": True,
-                "message": "Profile image updated successfully"
-            })
-            
+            return JsonResponse(
+                {
+                    "profile_image": f"/media/profile_images/{filename}",
+                    "success": True,
+                    "message": "Profile image updated successfully",
+                }
+            )
+
         except Exception as e:
             print("\n=== Error in Profile Image Upload ===")
             print(f"Error type: {type(e).__name__}")
             print(f"Error message: {str(e)}")
             import traceback
+
             traceback.print_exc()
             print("===================================\n")
             return JsonResponse({"error": str(e)}, status=400)
-            
+
     return JsonResponse({"error": "Invalid request method"}, status=405)
 
 
