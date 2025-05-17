@@ -4,7 +4,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 import json
 from bson import ObjectId
-from .models import BlogPosts, Users, Comments, Exercises
+from .models import BlogPosts, Users, Comments, Exercises, ChatLogs
 import traceback
 from .models import MoodLogs
 from datetime import datetime
@@ -12,6 +12,7 @@ from bson import ObjectId
 from datetime import datetime
 from django.conf import settings
 import os
+import sys
 
 
 @csrf_exempt
@@ -689,7 +690,9 @@ def get_user_challenges(request, user_id):
 def add_chat_log(request):
     if request.method == "POST":
         try:
+            print("[add_chat_log] Raw body:", request.body, file=sys.stderr)
             data = json.loads(request.body)
+            print("[add_chat_log] Parsed data:", data, file=sys.stderr)
             user_id = data.get("user_id")
             message = data.get("message")
             sender = data.get("sender")
@@ -698,6 +701,7 @@ def add_chat_log(request):
                 user_id=user_id, message=message, sender=sender
             )
 
+            print("[add_chat_log] Saved successfully", file=sys.stderr)
             return JsonResponse(
                 {
                     "message": "Chat log added successfully",
@@ -706,6 +710,10 @@ def add_chat_log(request):
                 status=201,
             )
         except Exception as e:
+            import traceback
+
+            print("[add_chat_log] Exception:", str(e), file=sys.stderr)
+            traceback.print_exc()
             return JsonResponse({"error": str(e)}, status=400)
 
     return JsonResponse({"error": "Invalid request method"}, status=405)
