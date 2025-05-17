@@ -4,9 +4,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 import json
 from bson import ObjectId
-from .models import BlogPosts, Users
+from .models import BlogPosts, Users, Comments, Exercises
 import traceback
-from .models import Comments
+from .models import MoodLogs
 from datetime import datetime
 from bson import ObjectId
 from datetime import datetime
@@ -594,6 +594,7 @@ def add_exercise(request):
                 duration=duration,
                 completed=completed,
             )
+            print("saved successfully")
 
             return JsonResponse(
                 {
