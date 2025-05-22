@@ -36,3 +36,7 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+
+# Config files with sensitive information
+app/config/aiConfig.js
+app/config/apiConfig.js

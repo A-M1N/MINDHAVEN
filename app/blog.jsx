@@ -20,6 +20,7 @@ import {
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Svg, Path } from 'react-native-svg';
+import { API_URLS } from "./config/apiConfig";
 
 const { width, height } = Dimensions.get("window");
 
@@ -157,6 +158,34 @@ const Button = ({
 
 // Header with navigation and branding
 const Header = ({ onProfilePress }) => {
+  const [profileImage, setProfileImage] = useState(null);
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const userId = await AsyncStorage.getItem('user_id');
+        if (!userId) return;
+
+        const response = await fetch(`${API_URLS.USER_PROFILE}${userId}/`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) throw new Error("Failed to fetch user profile");
+
+        const data = await response.json();
+        setProfileImage(data.profile_image);
+      } catch (err) {
+        setImageError(true);
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
+
   return (
     <View style={styles.header}>
       <View style={styles.headerContent}>
@@ -170,7 +199,11 @@ const Header = ({ onProfilePress }) => {
 
         <TouchableOpacity onPress={onProfilePress} style={styles.profileButton}>
           <Avatar
-            source={require("../assets/images/profile.jpg")}
+            source={
+              imageError || !profileImage
+                ? require("../assets/images/no-profile.png")
+                : { uri: profileImage }
+            }
             size={36}
           />
         </TouchableOpacity>
@@ -613,60 +646,10 @@ const BlogScreen = () => {
   const fetchPosts = async () => {
     setIsLoading(true);
     try {
-      // First, fetch the user's liked posts if they're logged in
-      let userLikes = {};
-      if (user_id) {
-        try {
-          const likesResponse = await fetch(
-            `http://localhost:8000/api/get_user_likes/${user_id}/`
-          );
-
-          if (likesResponse.ok) {
-            const likesData = await likesResponse.json();
-            // Create a map of postId -> liked status
-            if (likesData.liked_posts && Array.isArray(likesData.liked_posts)) {
-              likesData.liked_posts.forEach(postId => {
-                userLikes[postId] = true;
-              });
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching user likes:", error);
-          // Non-critical, continue with empty likes
-        }
-      }
-
-      // Now fetch the actual posts
-      const response = await fetch(
-        "http://localhost:8000/api/get_blog_posts/",
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
+      const response = await fetch(API_URLS.BLOG_POSTS);
+      if (!response.ok) throw new Error("Failed to fetch posts");
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch posts");
-      }
-
-      if (!data.blog_posts) {
-        throw new Error("No posts data received");
-      }
-
-      // Update the posts with their liked status
-      const updatedPosts = data.blog_posts.map(post => ({
-        ...post,
-        isLiked: !!userLikes[post._id]
-      }));
-
-      setPosts(updatedPosts);
-
-      // Also update the likedPosts state object
-      setLikedPosts(userLikes);
+      setPosts(data);
     } catch (error) {
       console.error("Error fetching posts:", error);
       Alert.alert("Error", error.message || "Failed to fetch posts");
@@ -688,26 +671,21 @@ const BlogScreen = () => {
     }
 
     try {
-      const response = await fetch(
-        "http://localhost:8000/api/create_blog_post/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            user_id: user_id,
-            title: title,
-            content: content,
-            is_anonymous: false,
-          }),
-        }
-      );
-
-      const data = await response.json();
+      const response = await fetch(API_URLS.CREATE_POST, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: user_id,
+          title: title,
+          content: content,
+          is_anonymous: false,
+        }),
+      });
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create post");
+        throw new Error("Failed to create post");
       }
 
       fetchPosts();
@@ -748,20 +726,13 @@ const BlogScreen = () => {
     );
 
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/toggle_like/${postId}/`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            user_id: user_id,
-          }),
-        }
-      );
-
-      const data = await response.json();
+      const response = await fetch(`${API_URLS.TOGGLE_LIKE}${postId}/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ user_id }),
+      });
 
       if (!response.ok) {
         // If the request failed, revert changes
@@ -782,7 +753,7 @@ const BlogScreen = () => {
           )
         );
 
-        throw new Error(data.error || "Failed to toggle like");
+        throw new Error("Failed to toggle like");
       }
 
       // Server might return a different state than we expected
@@ -811,28 +782,17 @@ const BlogScreen = () => {
     }
   };
 
-  const fetchComments = useCallback(async (postId) => {
+  const fetchComments = async (postId) => {
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/get_post_comments/${postId}/`
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to fetch comments");
-      }
-
+      const response = await fetch(`${API_URLS.POST_COMMENTS}${postId}/`);
+      if (!response.ok) throw new Error("Failed to fetch comments");
       const data = await response.json();
-
-      setComments((prev) => ({
-        ...prev,
-        [postId]: data.comments,
-      }));
+      setComments(data);
     } catch (error) {
       console.error("Error fetching comments:", error);
       Alert.alert("Error", "Failed to fetch comments");
     }
-  }, []);
+  };
 
   const handleCommentTextChange = (postId, text) => {
     setCommentText((prev) => ({
@@ -853,7 +813,7 @@ const BlogScreen = () => {
     }
 
     try {
-      const response = await fetch("http://localhost:8000/api/add_comment/", {
+      const response = await fetch(API_URLS.ADD_COMMENT, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -865,10 +825,8 @@ const BlogScreen = () => {
         }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || "Failed to submit comment");
+        throw new Error("Failed to submit comment");
       }
 
       setCommentText((prev) => ({
@@ -886,44 +844,18 @@ const BlogScreen = () => {
 
   const handleCommentLike = async (commentId) => {
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/toggle_comment_like/${commentId}/`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            user_id: user_id,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error);
-      }
-
-      setComments((prevComments) => {
-        const newComments = { ...prevComments };
-        Object.keys(newComments).forEach((postId) => {
-          newComments[postId] = newComments[postId].map((comment) =>
-            comment._id === commentId
-              ? { ...comment, like_count: data.like_count }
-              : comment
-          );
-        });
-        return newComments;
+      const response = await fetch(`${API_URLS.TOGGLE_COMMENT_LIKE}${commentId}/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ user_id }),
       });
 
-      setLikedComments((prev) => ({
-        ...prev,
-        [commentId]: data.liked,
-      }));
+      if (!response.ok) throw new Error("Failed to toggle comment like");
+      fetchComments(selectedPost);
     } catch (error) {
-      console.error("Error liking comment:", error);
-      Alert.alert("Error", error.message);
+      console.error("Error toggling comment like:", error);
     }
   };
 
