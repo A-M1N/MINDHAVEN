@@ -21,16 +21,18 @@ import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Svg, Path } from 'react-native-svg';
 import { API_URLS } from "./config/apiConfig";
+import { useUser } from "./UserContext";
 
 const { width, height } = Dimensions.get("window");
 
 // Avatar component for consistent styling
-const Avatar = ({ source, size = 40, style }) => (
+const Avatar = ({ source, size = 40, style, onError }) => (
   <View style={[styles.avatarContainer, { width: size, height: size, borderRadius: size / 2 }, style]}>
     <Image
       source={source}
       style={{ width: size - 4, height: size - 4, borderRadius: (size - 4) / 2 }}
       resizeMode="cover"
+      onError={onError}
     />
   </View>
 );
@@ -158,33 +160,8 @@ const Button = ({
 
 // Header with navigation and branding
 const Header = ({ onProfilePress }) => {
-  const [profileImage, setProfileImage] = useState(null);
+  const { user } = useUser();
   const [imageError, setImageError] = useState(false);
-
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      try {
-        const userId = await AsyncStorage.getItem('user_id');
-        if (!userId) return;
-
-        const response = await fetch(`${API_URLS.USER_PROFILE}${userId}/`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (!response.ok) throw new Error("Failed to fetch user profile");
-
-        const data = await response.json();
-        setProfileImage(data.profile_image);
-      } catch (err) {
-        setImageError(true);
-      }
-    };
-
-    fetchUserProfile();
-  }, []);
 
   return (
     <View style={styles.header}>
@@ -200,11 +177,12 @@ const Header = ({ onProfilePress }) => {
         <TouchableOpacity onPress={onProfilePress} style={styles.profileButton}>
           <Avatar
             source={
-              imageError || !profileImage
+              imageError || !user?.profile_image
                 ? require("../assets/images/no-profile.png")
-                : { uri: profileImage }
+                : { uri: user.profile_image }
             }
             size={36}
+            onError={() => setImageError(true)}
           />
         </TouchableOpacity>
       </View>
@@ -213,10 +191,12 @@ const Header = ({ onProfilePress }) => {
 };
 
 // Create post component
-const CreatePostCard = ({ onCreatePost, user }) => {
+const CreatePostCard = ({ onCreatePost }) => {
+  const { user } = useUser();
   const [isExpanded, setIsExpanded] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [imageError, setImageError] = useState(false);
 
   const handlePost = () => {
     if (!title.trim() || !content.trim()) {
@@ -232,6 +212,26 @@ const CreatePostCard = ({ onCreatePost, user }) => {
 
   return (
     <View style={styles.createPostCard}>
+      <View style={styles.createPostHeader}>
+        <Avatar
+          source={
+            imageError || !user?.profile_image
+              ? require("../assets/images/no-profile.png")
+              : { uri: user.profile_image }
+          }
+          size={44}
+          onError={() => setImageError(true)}
+        />
+        <TouchableOpacity
+          style={styles.createPostInput}
+          onPress={() => setIsExpanded(true)}
+        >
+          <Text style={styles.createPostPlaceholder}>
+            What's on your mind?
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {!isExpanded ? (
         <Pressable
           style={styles.createPostCollapsed}
@@ -303,11 +303,13 @@ const PostCard = ({
   handleCommentLike,
   likedComments,
 }) => {
+  const { user } = useUser();
   const [showComments, setShowComments] = useState(false);
   const [commentInput, setCommentInput] = useState("");
   const [isCommentsLoaded, setIsCommentsLoaded] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const heartScale = useRef(new Animated.Value(1)).current;
+  const [imageError, setImageError] = useState(false);
 
   const {
     _id,
@@ -388,11 +390,12 @@ const PostCard = ({
       <View style={styles.postHeader}>
         <Avatar
           source={
-            image
-              ? { uri: image }
-              : require("../assets/images/defaultProfile.png")
+            imageError || !image
+              ? require("../assets/images/no-profile.png")
+              : { uri: image }
           }
           size={44}
+          onError={() => setImageError(true)}
         />
         <View style={styles.postHeaderInfo}>
           <Text style={styles.postAuthor}>
@@ -569,6 +572,8 @@ const PostCard = ({
 
 // Comment component
 const CommentItem = ({ comment, onLike, isLiked }) => {
+  const { user } = useUser();
+  const [imageError, setImageError] = useState(false);
   const formattedDate = comment.created_at
     ? new Date(comment.created_at).toLocaleDateString('en-US', {
       month: 'short',
@@ -580,8 +585,13 @@ const CommentItem = ({ comment, onLike, isLiked }) => {
     <View style={styles.commentItem}>
       <View style={styles.commentHeader}>
         <Avatar
-          source={require("../assets/images/defaultProfile.png")}
+          source={
+            imageError || !comment.user_profile_image
+              ? require("../assets/images/no-profile.png")
+              : { uri: comment.user_profile_image }
+          }
           size={32}
+          onError={() => setImageError(true)}
         />
         <View style={styles.commentInfo}>
           <Text style={styles.commentAuthor}>
@@ -649,10 +659,11 @@ const BlogScreen = () => {
       const response = await fetch(API_URLS.BLOG_POSTS);
       if (!response.ok) throw new Error("Failed to fetch posts");
       const data = await response.json();
-      setPosts(data);
+      setPosts(Array.isArray(data.blog_posts) ? data.blog_posts : []);
     } catch (error) {
       console.error("Error fetching posts:", error);
       Alert.alert("Error", error.message || "Failed to fetch posts");
+      setPosts([]);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -1089,26 +1100,6 @@ const styles = StyleSheet.create({
     elevation: 2,
     overflow: "hidden",
   },
-  createPostCollapsed: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-  },
-  createPostPrompt: {
-    flex: 1,
-    backgroundColor: "#F0F2F5",
-    borderRadius: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginLeft: 12,
-  },
-  createPostPromptText: {
-    color: "#626A7C",
-    fontSize: 15,
-  },
-  createPostExpanded: {
-    padding: 16,
-  },
   createPostHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1150,6 +1141,34 @@ const styles = StyleSheet.create({
   },
   createPostActions: {
     alignItems: "flex-end",
+  },
+  createPostInput: {
+    flex: 1,
+    padding: 16,
+  },
+  createPostPlaceholder: {
+    color: "#626A7C",
+    fontSize: 15,
+  },
+  createPostCollapsed: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+  },
+  createPostPrompt: {
+    flex: 1,
+    backgroundColor: "#F0F2F5",
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginLeft: 12,
+  },
+  createPostPromptText: {
+    color: "#626A7C",
+    fontSize: 15,
+  },
+  createPostExpanded: {
+    padding: 16,
   },
 
   // Post card styles

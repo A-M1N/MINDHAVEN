@@ -1,45 +1,76 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, Image, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, Image, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Svg, Path } from 'react-native-svg';
+import * as ImagePicker from 'expo-image-picker';
 import { API_URLS } from "./config/apiConfig";
+import { useUser } from "./UserContext";
 
-const API_URL = "http://localhost:8000/api/user-profile/";
 const DEFAULT_AVATAR = require("../assets/images/no-profile.png");
 
 const ProfileScreen = () => {
-  const [userProfile, setUserProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { user, loading, updateProfileImage, fetchUserProfile } = useUser();
+  const [uploading, setUploading] = useState(false);
   const [imageError, setImageError] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      try {
-        const user_id = await AsyncStorage.getItem("user_id");
-        if (!user_id) {
-          Alert.alert("Error", "User not logged in");
-          return;
-        }
-
-        const response = await fetch(`${API_URLS.USER_PROFILE}${user_id}/`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch user profile");
-        }
-        const data = await response.json();
-        setUserProfile(data);
-      } catch (error) {
-        console.error("Error fetching user profile:", error);
-        Alert.alert("Error", "Failed to fetch user profile");
-      } finally {
-        setLoading(false);
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant permission to access your photos');
+        return;
       }
-    };
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+      });
+      if (!result.canceled) {
+        await uploadImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
 
-    fetchUserProfile();
-  }, []);
+  const uploadImage = async (uri) => {
+    try {
+      setUploading(true);
+      const user_id = await AsyncStorage.getItem("user_id");
+      if (!user_id) {
+        Alert.alert("Error", "User not logged in");
+        return;
+      }
+      const formData = new FormData();
+      formData.append('profile_image', {
+        uri: uri,
+        type: 'image/jpeg',
+        name: 'profile.jpg',
+      });
+      const response = await fetch(`${API_URLS.UPDATE_PROFILE_IMAGE}${user_id}/`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Failed to upload image');
+      }
+      const data = await response.json();
+      updateProfileImage(data.profile_image);
+      Alert.alert('Success', 'Profile picture updated successfully');
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      Alert.alert('Error', 'Failed to upload profile picture');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -59,15 +90,7 @@ const ProfileScreen = () => {
     );
   }
 
-  if (error) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Error: {error}</Text>
-      </View>
-    );
-  }
-
-  if (!userProfile) {
+  if (!user) {
     return (
       <View style={styles.container}>
         <Text style={styles.errorText}>No user profile found</Text>
@@ -85,19 +108,27 @@ const ProfileScreen = () => {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
       </View>
-
       <View style={styles.profileCard}>
-        <Image
-          source={{ uri: imageError || !userProfile.profile_image ? DEFAULT_AVATAR : userProfile.profile_image }}
-          style={styles.profileCardImage}
-          onError={() => setImageError(true)}
-        />
+        <TouchableOpacity onPress={pickImage} style={styles.imageContainer}>
+          <Image
+            source={{ uri: imageError || !user.profile_image ? DEFAULT_AVATAR : user.profile_image }}
+            style={styles.profileCardImage}
+            onError={() => setImageError(true)}
+          />
+          <View style={styles.editOverlay}>
+            <Text style={styles.editText}>Change Photo</Text>
+          </View>
+          {uploading && (
+            <View style={styles.uploadingOverlay}>
+              <ActivityIndicator size="large" color="#5100F3" />
+            </View>
+          )}
+        </TouchableOpacity>
         <View style={styles.profileInfo}>
-          <Text style={styles.profileName}>{userProfile.name}</Text>
-          <Text style={styles.profileEmail}>{userProfile.email}</Text>
+          <Text style={styles.profileName}>{user.name}</Text>
+          <Text style={styles.profileEmail}>{user.email}</Text>
         </View>
       </View>
-
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutButtonText}>Logout</Text>
       </TouchableOpacity>
@@ -139,11 +170,40 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  imageContainer: {
+    position: 'relative',
+    marginRight: 20,
+  },
   profileCardImage: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    marginRight: 20,
+  },
+  editOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 4,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  editText: {
+    color: '#fff',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  uploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   profileInfo: {
     flex: 1,

@@ -2,6 +2,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useUser } from "./UserContext";
 
 const Home = () => {
   const router = useRouter();
@@ -32,23 +33,30 @@ const Home = () => {
   );
 };
 
-const Header = ({ onProfilePress }) => (
-  <View style={styles.header}>
-    <View style={styles.logoAndTitle}>
-      <Image
-        source={require("../assets/images/logo.png")} // Replace with your logo
-        style={styles.logo}
-      />
-      <Text style={styles.title}>MindHaven</Text>
+const Header = ({ onProfilePress }) => {
+  const { user } = useUser();
+  return (
+    <View style={styles.header}>
+      <View style={styles.logoAndTitle}>
+        <Image
+          source={require("../assets/images/logo.png")}
+          style={styles.logo}
+        />
+        <Text style={styles.title}>MindHaven</Text>
+      </View>
+      <TouchableOpacity onPress={onProfilePress}>
+        <Image
+          source={
+            !user?.profile_image
+              ? require("../assets/images/no-profile.png")
+              : { uri: user.profile_image }
+          }
+          style={styles.profileImage}
+        />
+      </TouchableOpacity>
     </View>
-    <TouchableOpacity onPress={onProfilePress}>
-      <Image
-        source={require("../assets/images/profile.jpg")} // Replace with user's profile image
-        style={styles.profileImage}
-      />
-    </TouchableOpacity>
-  </View>
-);
+  );
+};
 
 const ButtonContainer = () => (
   <View style={styles.buttonContainer}>
