@@ -44,9 +44,7 @@ def get_blog_posts(request):
                     "author_name": (
                         "Anonymous" if post.get("is_anonymous") else author_name
                     ),
-                    "author_profile_image": (
-                        None if post.get("is_anonymous") else profile_image
-                    ),
+                    "image": None if post.get("is_anonymous") else profile_image,
                     "like_count": post.get("like_count", 0),
                     "comment_count": comment_count,
                     "created_at": post["created_at"].isoformat(),

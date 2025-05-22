@@ -212,34 +212,19 @@ const CreatePostCard = ({ onCreatePost }) => {
 
   return (
     <View style={styles.createPostCard}>
-      <View style={styles.createPostHeader}>
-        <Avatar
-          source={
-            imageError || !user?.profile_image
-              ? require("../assets/images/no-profile.png")
-              : { uri: user.profile_image }
-          }
-          size={44}
-          onError={() => setImageError(true)}
-        />
-        <TouchableOpacity
-          style={styles.createPostInput}
-          onPress={() => setIsExpanded(true)}
-        >
-          <Text style={styles.createPostPlaceholder}>
-            What's on your mind?
-          </Text>
-        </TouchableOpacity>
-      </View>
-
       {!isExpanded ? (
         <Pressable
           style={styles.createPostCollapsed}
           onPress={() => setIsExpanded(true)}
         >
           <Avatar
-            source={require("../assets/images/defaultProfile.png")}
+            source={
+              imageError || !user?.profile_image
+                ? require("../assets/images/no-profile.png")
+                : { uri: user.profile_image }
+            }
             size={40}
+            onError={() => setImageError(true)}
           />
           <View style={styles.createPostPrompt}>
             <Text style={styles.createPostPromptText}>Share your thoughts with the community...</Text>

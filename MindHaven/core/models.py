@@ -148,6 +148,7 @@ class BlogPosts(BaseCollection):
     def create_post(cls, user_id, title, content, is_anonymous=False):
         user = Users.find_by_id(user_id)
         user_name = user.get("name", "Anonymous") if user else "Anonymous"
+        user_profile_image = user.get("profile_image") if user else None
 
         post_data = {
             "user_id": ObjectId(user_id),
@@ -155,6 +156,7 @@ class BlogPosts(BaseCollection):
             "content": content,
             "is_anonymous": is_anonymous,
             "author_name": "Anonymous" if is_anonymous else user_name,
+            "image": None if is_anonymous else user_profile_image,
             "likes": [],
             "like_count": 0,
             # No need to add created_at, BaseCollection.create() will add it
