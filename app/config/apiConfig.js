@@ -14,7 +14,7 @@ export const API_URLS = {
 
     // User endpoints
     USER_PROFILE: `${API_BASE_URL}/api/get_user/`,
-    UPDATE_PROFILE_IMAGE: `${API_BASE_URL}/api/upload_profile_image/`,
+    UPDATE_PROFILE_IMAGE: (userId) => `${API_BASE_URL}/api/upload_profile_image/${userId}/`,
 
     // Blog endpoints
     BLOG_POSTS: `${API_BASE_URL}/api/get_blog_posts/`,

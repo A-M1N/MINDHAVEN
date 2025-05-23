@@ -218,126 +218,68 @@ def add_user(request):
 
 # --- Profile Image Upload ---
 @csrf_exempt
-def upload_profile_image(request):
+def upload_profile_image(request, user_id):
     if request.method == "POST":
         try:
-            print("\n=== Starting Profile Image Upload ===")
+            print(f"Received upload request for user {user_id}")
+            print(f"Request FILES: {request.FILES}")
+            print(f"Request POST: {request.POST}")
+            print(f"Request content type: {request.content_type}")
 
-            # Debug request information
-            print("Content Type:", request.content_type)
-            print("POST data:", dict(request.POST))
-            print("FILES data:", dict(request.FILES))
+            user = Users.find_by_id(user_id)
+            if not user:
+                return JsonResponse({"error": "User not found"}, status=404)
 
-            # Get user_id from POST data
-            user_id = request.POST.get("user_id")
-            print(f"User ID from POST: {user_id}")
+            if "profile_image" not in request.FILES:
+                print("No profile_image in request.FILES")
+                print(f"Available files: {list(request.FILES.keys())}")
+                return JsonResponse({"error": "No image file provided"}, status=400)
 
-            # Get image from FILES
-            image = request.FILES.get("image")
-            print(f"Image from FILES: {image}")
-            if image:
-                print(f"Image name: {image.name}")
-                print(f"Image size: {image.size}")
-                print(f"Image content type: {image.content_type}")
+            image_file = request.FILES["profile_image"]
+            print(
+                f"Received file: {image_file.name}, size: {image_file.size}, content_type: {image_file.content_type}"
+            )
 
-            if not user_id:
-                return JsonResponse({"error": "Missing user_id"}, status=400)
-            if not image:
-                return JsonResponse({"error": "Missing image file"}, status=400)
+            # Create profile_images directory if it doesn't exist
+            profile_images_dir = os.path.join(settings.MEDIA_ROOT, "profile_images")
+            os.makedirs(profile_images_dir, exist_ok=True)
+            print(f"Profile images directory: {profile_images_dir}")
 
-            # Get absolute paths
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            media_root = os.path.join(base_dir, "media")
-            upload_dir = os.path.join(media_root, "profile_images")
+            # Generate unique filename using user_id
+            file_extension = os.path.splitext(image_file.name)[1]
+            filename = f"profile_{user_id}{file_extension}"
+            file_path = os.path.join("profile_images", filename)
+            full_path = os.path.join(settings.MEDIA_ROOT, file_path)
+            print(f"Saving file to: {full_path}")
 
-            print(f"Base directory: {base_dir}")
-            print(f"Media root path: {media_root}")
-            print(f"Upload directory path: {upload_dir}")
+            # Save the file
+            with open(full_path, "wb+") as destination:
+                for chunk in image_file.chunks():
+                    destination.write(chunk)
 
-            # Ensure directories exist
-            try:
-                os.makedirs(media_root, exist_ok=True)
-                os.makedirs(upload_dir, exist_ok=True)
-                print("Directories created/verified successfully")
-            except Exception as e:
-                print(f"Error creating directories: {str(e)}")
-                return JsonResponse(
-                    {"error": f"Failed to create upload directory: {str(e)}"},
-                    status=500,
-                )
+            # Build the absolute URL
+            domain = request.build_absolute_uri("/")[:-1]  # removes trailing slash
+            full_url = f"{domain}/media/profile_images/{filename}"
+            Users.update_profile_image(user_id, full_url)
+            print(f"Updated user profile image in database: {full_url}")
 
-            # Generate filename and path
-            filename = f"{user_id}_{image.name}"
-            image_path = os.path.join(upload_dir, filename)
-
-            print(f"Attempting to save image to: {image_path}")
-
-            # Save the file with error handling
-            try:
-                with open(image_path, "wb+") as destination:
-                    for chunk in image.chunks():
-                        destination.write(chunk)
-                print(f"File saved successfully to {image_path}")
-
-                # Verify file exists and size
-                if not os.path.exists(image_path):
-                    raise Exception("File was not saved successfully")
-
-                file_size = os.path.getsize(image_path)
-                print(f"Saved file size: {file_size} bytes")
-
-                if file_size == 0:
-                    raise Exception("File was saved but is empty")
-
-            except Exception as e:
-                print(f"Error saving file: {str(e)}")
-                return JsonResponse(
-                    {"error": f"Failed to save image: {str(e)}"}, status=500
-                )
-
-            # Build the absolute URL to serve the image
-            image_url = f"http://127.0.0.1:8000/media/profile_images/{filename}"
-            print(f"Image URL: {image_url}")
-
-            # Update the user profile_image field with absolute URL
-            try:
-                result = Users.update_profile_image(user_id, image_url)
-                if not result.acknowledged:
-                    raise Exception("MongoDB update was not acknowledged")
-
-                # Verify the update was successful
-                updated_user = Users.find_by_id(user_id)
-                if updated_user and updated_user.get("profile_image") == image_url:
-                    print("User profile successfully updated with new image URL")
-                else:
-                    raise Exception("Failed to verify user profile update")
-
-            except Exception as e:
-                print(f"Error updating user profile: {str(e)}")
-                return JsonResponse(
-                    {"error": f"Failed to update user profile: {str(e)}"}, status=500
-                )
-
-            print("=== Profile Image Upload Complete ===\n")
+            # Return the same path in the response
             return JsonResponse(
                 {
-                    "profile_image": f"/media/profile_images/{filename}",
-                    "success": True,
+                    "profile_image": full_url,
                     "message": "Profile image updated successfully",
-                }
+                },
+                status=200,
             )
 
         except Exception as e:
-            print("\n=== Error in Profile Image Upload ===")
-            print(f"Error type: {type(e).__name__}")
-            print(f"Error message: {str(e)}")
+            print(f"Error in upload_profile_image: {str(e)}")
             import traceback
 
             traceback.print_exc()
-            print("===================================\n")
-            return JsonResponse({"error": str(e)}, status=400)
+            return JsonResponse({"error": str(e)}, status=500)
 
-    return JsonResponse({"error": "Invalid request method"}, status=405)
+    return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
 def get_user(request, user_id):

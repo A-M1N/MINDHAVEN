@@ -12,7 +12,11 @@ urlpatterns = [
         update_default_profile_images,
         name="update_default_profile_images",
     ),
-    path("upload_profile_image/", upload_profile_image, name="upload_profile_image"),
+    path(
+        "upload_profile_image/<str:user_id>/",
+        upload_profile_image,
+        name="upload_profile_image",
+    ),
     # MoodLogs endpoints
     path("add_mood_log/", add_mood_log, name="add_mood_log"),
     path(
