@@ -4,7 +4,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 import json
 from bson import ObjectId
-from .models import BlogPosts, Users, Comments, Exercises, ChatLogs
+from .models import BlogPosts, Users, Comments, Exercises, ChatLogs, ActivityLogs
 import traceback
 from .models import MoodLogs
 from datetime import datetime
@@ -528,6 +528,20 @@ def add_exercise(request):
             duration = data.get("duration")
             completed = data.get("completed", False)
 
+            # Prevent duplicate exercises for the same user, name, and type
+            existing = Exercises.get_collection().find_one(
+                {"user_id": ObjectId(user_id), "name": name, "type": type}
+            )
+            if existing:
+                return JsonResponse(
+                    {
+                        "message": "Exercise already exists",
+                        "exercise_id": str(existing["_id"]),
+                        "duplicate": True,
+                    },
+                    status=200,
+                )
+
             result = Exercises.create_exercise(
                 user_id=user_id,
                 name=name,
@@ -541,6 +555,7 @@ def add_exercise(request):
                 {
                     "message": "Exercise added successfully",
                     "exercise_id": str(result.inserted_id),
+                    "duplicate": False,
                 },
                 status=201,
             )
@@ -784,6 +799,81 @@ def update_default_profile_images(request):
                     "updated_count": updated_count,
                 }
             )
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
+@csrf_exempt
+def add_activity_log(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            user_id = data.get("user_id")
+            activity = data.get("activity")
+            is_positive = data.get("is_positive", True)
+            date_str = data.get("date", datetime.now().isoformat())
+
+            if not user_id or not activity:
+                return JsonResponse(
+                    {"error": "User ID and activity are required"}, status=400
+                )
+
+            # Handle date parsing with timezone
+            try:
+                # Remove 'Z' if present and parse the date
+                date_str = date_str.replace("Z", "+00:00")
+                date = datetime.fromisoformat(date_str)
+            except ValueError:
+                # If parsing fails, use current time
+                date = datetime.now()
+
+            # Create activity log document
+            activity_log = {
+                "user_id": ObjectId(user_id),
+                "activity": activity,
+                "is_positive": is_positive,
+                "date": date,
+                "created_at": datetime.now(),
+            }
+
+            # Insert into database
+            result = ActivityLogs.get_collection().insert_one(activity_log)
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": "Activity logged successfully",
+                    "activity_log_id": str(result.inserted_id),
+                }
+            )
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
+def get_user_activity_logs(request, user_id):
+    if request.method == "GET":
+        try:
+            # Get all activity logs for the user
+            activity_logs = list(
+                ActivityLogs.get_collection()
+                .find({"user_id": ObjectId(user_id)})
+                .sort("date", -1)
+            )
+
+            # Convert ObjectId to string for JSON serialization
+            for log in activity_logs:
+                log["_id"] = str(log["_id"])
+                log["user_id"] = str(log["user_id"])
+                log["date"] = log["date"].isoformat()
+                log["created_at"] = log["created_at"].isoformat()
+
+            return JsonResponse({"activity_logs": activity_logs})
+
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
     View,
     Text,
@@ -8,125 +8,102 @@ import {
     ScrollView,
     Dimensions,
     Platform,
+    Modal,
+    TextInput,
+    Button,
 } from "react-native";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width } = Dimensions.get("window");
 
-const exerciseTypes = [
-    {
-        id: 1,
-        title: "Breathing Exercises",
-        description: "Calm your mind with controlled breathing techniques",
-        image: require("../assets/images/brain.png"),
-        color: "#e0e7ff",
-        exercises: [
-            {
-                id: 101,
-                title: "Box Breathing",
-                duration: "5 minutes",
-                description: "Inhale for 4 counts, hold for 4, exhale for 4, hold for 4. Repeat.",
-            },
-            {
-                id: 102,
-                title: "4-7-8 Breathing",
-                duration: "5 minutes",
-                description: "Inhale for 4 counts, hold for 7, exhale for 8. Repeat to reduce anxiety.",
-            },
-            {
-                id: 103,
-                title: "Diaphragmatic Breathing",
-                duration: "10 minutes",
-                description: "Deep belly breathing to activate the parasympathetic nervous system.",
-            },
-        ],
-    },
-    {
-        id: 2,
-        title: "Meditation",
-        description: "Guided and unguided meditation practices",
-        image: require("../assets/images/heart-outline.jpg"),
-        color: "#fae8ff",
-        exercises: [
-            {
-                id: 201,
-                title: "Body Scan Meditation",
-                duration: "15 minutes",
-                description: "Progressive relaxation by focusing attention throughout the body.",
-            },
-            {
-                id: 202,
-                title: "Loving-Kindness Meditation",
-                duration: "10 minutes",
-                description: "Develop feelings of goodwill, kindness and warmth towards others.",
-            },
-            {
-                id: 203,
-                title: "Mindfulness Meditation",
-                duration: "10 minutes",
-                description: "Focus on the present moment, observing thoughts without judgment.",
-            },
-        ],
-    },
-    {
-        id: 3,
-        title: "Grounding Techniques",
-        description: "Connect with the present moment to reduce anxiety",
-        image: require("../assets/images/Icon trophy.png"),
-        color: "#dcfce7",
-        exercises: [
-            {
-                id: 301,
-                title: "5-4-3-2-1 Technique",
-                duration: "5 minutes",
-                description: "Name 5 things you see, 4 you feel, 3 you hear, 2 you smell, and 1 you taste.",
-            },
-            {
-                id: 302,
-                title: "Progressive Muscle Relaxation",
-                duration: "15 minutes",
-                description: "Tense and then release each muscle group from toes to head.",
-            },
-            {
-                id: 303,
-                title: "Cold Water Technique",
-                duration: "2 minutes",
-                description: "Splash cold water on your face to activate the parasympathetic nervous system.",
-            },
-        ],
-    },
-    {
-        id: 4,
-        title: "Cognitive Exercises",
-        description: "Reshape negative thought patterns",
-        image: require("../assets/images/Icon gear.png"),
-        color: "#ffedd5",
-        exercises: [
-            {
-                id: 401,
-                title: "Thought Record",
-                duration: "15 minutes",
-                description: "Identify and challenge negative thoughts with evidence.",
-            },
-            {
-                id: 402,
-                title: "Positive Affirmations",
-                duration: "5 minutes",
-                description: "Practice repeating positive statements to build self-confidence.",
-            },
-            {
-                id: 403,
-                title: "Gratitude Journaling",
-                duration: "10 minutes",
-                description: "Write down things you're grateful for to shift focus to the positive.",
-            },
-        ],
-    },
+const EXERCISE_API_URL = "http://localhost:8000/api/get_user_exercises/";
+
+const DEFAULT_TYPE_COLOR = "#e0e7ff";
+const DEFAULT_TYPE_IMAGE = require("../assets/images/brain.png");
+
+// Default description for user-added types
+const DEFAULT_TYPE_DESCRIPTION = "User-added activities and exercises.";
+
+// Flat array of all static exercises, each with a type
+const staticExercises = [
+    { id: 101, title: "Box Breathing", duration: "5 minutes", description: "Inhale for 4 counts, hold for 4, exhale for 4, hold for 4. Repeat.", type: "Breathing Exercises", image: require("../assets/images/brain.png"), color: "#e0e7ff" },
+    { id: 102, title: "4-7-8 Breathing", duration: "5 minutes", description: "Inhale for 4 counts, hold for 7, exhale for 8. Repeat to reduce anxiety.", type: "Breathing Exercises", image: require("../assets/images/brain.png"), color: "#e0e7ff" },
+    { id: 103, title: "Diaphragmatic Breathing", duration: "10 minutes", description: "Deep belly breathing to activate the parasympathetic nervous system.", type: "Breathing Exercises", image: require("../assets/images/brain.png"), color: "#e0e7ff" },
+    { id: 201, title: "Body Scan Meditation", duration: "15 minutes", description: "Progressive relaxation by focusing attention throughout the body.", type: "Meditation", image: require("../assets/images/heart-outline.jpg"), color: "#fae8ff" },
+    { id: 202, title: "Loving-Kindness Meditation", duration: "10 minutes", description: "Develop feelings of goodwill, kindness and warmth towards others.", type: "Meditation", image: require("../assets/images/heart-outline.jpg"), color: "#fae8ff" },
+    { id: 203, title: "Mindfulness Meditation", duration: "10 minutes", description: "Focus on the present moment, observing thoughts without judgment.", type: "Meditation", image: require("../assets/images/heart-outline.jpg"), color: "#fae8ff" },
+    { id: 301, title: "5-4-3-2-1 Technique", duration: "5 minutes", description: "Name 5 things you see, 4 you feel, 3 you hear, 2 you smell, and 1 you taste.", type: "Grounding Techniques", image: require("../assets/images/Icon trophy.png"), color: "#dcfce7" },
+    { id: 302, title: "Progressive Muscle Relaxation", duration: "15 minutes", description: "Tense and then release each muscle group from toes to head.", type: "Grounding Techniques", image: require("../assets/images/Icon trophy.png"), color: "#dcfce7" },
+    { id: 303, title: "Cold Water Technique", duration: "2 minutes", description: "Splash cold water on your face to activate the parasympathetic nervous system.", type: "Grounding Techniques", image: require("../assets/images/Icon trophy.png"), color: "#dcfce7" },
+    { id: 401, title: "Thought Record", duration: "15 minutes", description: "Identify and challenge negative thoughts with evidence.", type: "Cognitive Exercises", image: require("../assets/images/Icon gear.png"), color: "#ffedd5" },
+    { id: 402, title: "Positive Affirmations", duration: "5 minutes", description: "Practice repeating positive statements to build self-confidence.", type: "Cognitive Exercises", image: require("../assets/images/Icon gear.png"), color: "#ffedd5" },
+    { id: 403, title: "Gratitude Journaling", duration: "10 minutes", description: "Write down things you're grateful for to shift focus to the positive.", type: "Cognitive Exercises", image: require("../assets/images/Icon gear.png"), color: "#ffedd5" },
 ];
 
 const ExerciseScreen = () => {
     const router = useRouter();
+    const [exercises, setExercises] = useState(staticExercises);
     const [selectedType, setSelectedType] = useState(null);
+
+    // Fetch user exercises from backend and merge with static exercises
+    useEffect(() => {
+        const fetchUserExercises = async () => {
+            try {
+                const userId = await AsyncStorage.getItem('user_id');
+                if (!userId) return;
+                const res = await fetch(`${EXERCISE_API_URL}${userId}/`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (Array.isArray(data.exercises)) {
+                    // Map backend exercises to match static format
+                    const userExercises = data.exercises.map(ex => ({
+                        id: ex._id || Math.random().toString(36).slice(2),
+                        title: ex.name,
+                        duration: ex.duration ? `${ex.duration} minutes` : "",
+                        description: ex.description || "",
+                        type: ex.type || "activity",
+                        image: require("../assets/images/brain.png"), // fallback image
+                        color: "#e0e7ff", // fallback color
+                        user_id: ex.user_id,
+                    }));
+                    // Merge, avoiding duplicates by title+type+user_id
+                    const merged = [...staticExercises];
+                    userExercises.forEach(ux => {
+                        if (!merged.some(se => se.title === ux.title && se.type === ux.type && (se.user_id === ux.user_id || !ux.user_id))) {
+                            merged.push(ux);
+                        }
+                    });
+                    setExercises(merged);
+                }
+            } catch (err) {
+                console.error("Failed to fetch user exercises:", err);
+            }
+        };
+        fetchUserExercises();
+    }, []);
+
+    // Group exercises by type
+    const groupedByType = useMemo(() => {
+        const groups = {};
+        exercises.forEach(ex => {
+            if (!groups[ex.type]) groups[ex.type] = [];
+            groups[ex.type].push(ex);
+        });
+        return groups;
+    }, [exercises]);
+
+    // Get type meta (image/color) from the first exercise of that type, or use defaults
+    const getTypeMeta = (type) => {
+        const ex = groupedByType[type][0];
+        return {
+            image: ex.image || DEFAULT_TYPE_IMAGE,
+            color: ex.color || DEFAULT_TYPE_COLOR
+        };
+    };
+
+    // Capitalize type name for display
+    const capitalize = (str) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 
     const handleGoBack = () => {
         if (selectedType) {
@@ -144,7 +121,6 @@ const ExerciseScreen = () => {
         // In a real app, this would navigate to the exercise details
         // For now, we'll just show an alert
         console.log(`Selected exercise: ${exercise.title}`);
-        // Future implementation would route to a specific exercise page
         // router.push(`/exercise-detail/${exercise.id}`);
     };
 
@@ -162,7 +138,7 @@ const ExerciseScreen = () => {
                 </TouchableOpacity>
 
                 <Text style={styles.headerTitle}>
-                    {selectedType ? selectedType.title : "Mental Health Exercises"}
+                    {selectedType ? selectedType : "Mental Health Exercises"}
                 </Text>
 
                 <View style={{ width: 40 }} />
@@ -172,15 +148,15 @@ const ExerciseScreen = () => {
                 {selectedType ? (
                     // Show exercises for the selected type
                     <>
-                        <View style={[styles.typeBanner, { backgroundColor: selectedType.color }]}>
-                            <Image source={selectedType.image} style={styles.bannerImage} />
-                            <Text style={styles.bannerTitle}>{selectedType.title}</Text>
-                            <Text style={styles.bannerDescription}>{selectedType.description}</Text>
+                        <View style={[styles.typeBanner, { backgroundColor: getTypeMeta(selectedType).color }]}>\
+                            <Image source={getTypeMeta(selectedType).image} style={styles.bannerImage} />
+                            <Text style={styles.bannerTitle}>{capitalize(selectedType)}</Text>
+                            <Text style={styles.bannerDescription}>
+                                {groupedByType[selectedType][0].description || DEFAULT_TYPE_DESCRIPTION}
+                            </Text>
                         </View>
-
                         <Text style={styles.sectionTitle}>Available Exercises</Text>
-
-                        {selectedType.exercises.map((exercise) => (
+                        {groupedByType[selectedType].map((exercise) => (
                             <TouchableOpacity
                                 key={exercise.id}
                                 style={styles.exerciseItem}
@@ -205,22 +181,20 @@ const ExerciseScreen = () => {
                         ))}
                     </>
                 ) : (
-                    // Show exercise categories
+                    // Show exercise categories dynamically
                     <>
                         <Text style={styles.welcomeText}>
                             Choose from various exercises designed to improve your mental well-being
                         </Text>
-
-                        {exerciseTypes.map((type) => (
+                        {Object.keys(groupedByType).map((type) => (
                             <TouchableOpacity
-                                key={type.id}
-                                style={[styles.exerciseTypeCard, { backgroundColor: type.color }]}
+                                key={type}
+                                style={[styles.exerciseTypeCard, { backgroundColor: getTypeMeta(type).color }]}
                                 onPress={() => handleExerciseTypeSelect(type)}
                             >
-                                <Image source={type.image} style={styles.exerciseTypeImage} />
+                                <Image source={getTypeMeta(type).image} style={styles.exerciseTypeImage} />
                                 <View style={styles.exerciseTypeContent}>
-                                    <Text style={styles.exerciseTypeTitle}>{type.title}</Text>
-                                    <Text style={styles.exerciseTypeDescription}>{type.description}</Text>
+                                    <Text style={styles.exerciseTypeTitle}>{capitalize(type)}</Text>
                                 </View>
                             </TouchableOpacity>
                         ))}
@@ -302,10 +276,6 @@ const styles = StyleSheet.create({
         color: "#1e293b",
         marginBottom: 4,
     },
-    exerciseTypeDescription: {
-        fontSize: 14,
-        color: "#475569",
-    },
     typeBanner: {
         borderRadius: 12,
         marginBottom: 24,
@@ -325,9 +295,10 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     bannerDescription: {
-        fontSize: 16,
+        fontSize: 14,
         color: "#475569",
-        textAlign: "center",
+        marginBottom: 16,
+        lineHeight: 20,
     },
     sectionTitle: {
         fontSize: 20,

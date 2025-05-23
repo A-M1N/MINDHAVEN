@@ -24,6 +24,13 @@ urlpatterns = [
         get_user_mood_logs,
         name="get_user_mood_logs",
     ),
+    # Activity logs endpoints
+    path("add_activity_log/", add_activity_log, name="add_activity_log"),
+    path(
+        "get_user_activity_logs/<str:user_id>/",
+        get_user_activity_logs,
+        name="get_user_activity_logs",
+    ),
     # Journal entries endpoints
     path("add_journal_entry/", add_journal_entry, name="add_journal_entry"),
     path(

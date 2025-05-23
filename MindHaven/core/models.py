@@ -358,3 +358,32 @@ class ChatLogs(BaseCollection):
 # =====================
 class HappyUserTracking(BaseCollection):
     collection_name = "happy_user_tracking"
+
+
+class ActivityLogs:
+    collection_name = "activity_logs"
+
+    @classmethod
+    def get_collection(cls):
+        return db[cls.collection_name]
+
+    @classmethod
+    def create_log(cls, user_id, activity, is_positive=True, date=None):
+        if date is None:
+            date = datetime.now()
+
+        log = {
+            "user_id": ObjectId(user_id),
+            "activity": activity,
+            "is_positive": is_positive,
+            "date": date,
+            "created_at": datetime.now(),
+        }
+
+        return cls.get_collection().insert_one(log)
+
+    @classmethod
+    def get_user_logs(cls, user_id):
+        return (
+            cls.get_collection().find({"user_id": ObjectId(user_id)}).sort("date", -1)
+        )

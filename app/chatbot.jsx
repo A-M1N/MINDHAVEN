@@ -21,10 +21,34 @@ const { width } = Dimensions.get("window");
 const CHAT_LOG_API_URL = "http://localhost:8000/api/add_chat_log/";
 const GET_CHAT_LOGS_API_URL = "http://localhost:8000/api/get_user_chat_logs/";
 const MOOD_LOG_API_URL = "http://localhost:8000/api/add_mood_log/";
+const ACTIVITY_LOG_API_URL = "http://localhost:8000/api/add_activity_log/";
+const EXERCISE_API_URL = "http://localhost:8000/api/add_exercise/";
 
 // List of moods to detect
 const moodList = [
   "happy", "sad", "angry", "anxious", "stressed", "calm", "tired", "excited"
+];
+
+// Keywords that indicate positive feelings about activities
+const positiveKeywords = [
+  "love", "enjoy", "like", "good", "great", "helpful", "comfortable",
+  "relaxing", "calming", "therapeutic", "makes me feel better", "helps me",
+  "favorite", "best", "wonderful", "amazing", "perfect"
+];
+
+// Keywords that indicate negative feelings about activities
+const negativeKeywords = [
+  "hate", "dislike", "don't like", "bad", "terrible", "uncomfortable",
+  "stressful", "anxiety", "makes me feel worse", "worst", "awful",
+  "difficult", "hard", "tiring", "exhausting"
+];
+
+// Common activity verbs
+const activityVerbs = [
+  "doing", "performing", "practicing", "playing", "reading", "exercising",
+  "going", "running", "walking", "swimming", "dancing", "singing", "writing",
+  "drawing", "painting", "cooking", "baking", "gardening", "meditating",
+  "yoga", "stretching", "lifting", "cycling", "hiking", "climbing"
 ];
 
 const detectMood = (text) => {
@@ -34,6 +58,61 @@ const detectMood = (text) => {
       return mood;
     }
   }
+  return null;
+};
+
+const detectActivity = (text) => {
+  const lower = text.toLowerCase();
+
+  // Check if the message contains positive or negative feelings
+  const hasPositive = positiveKeywords.some(keyword => lower.includes(keyword));
+  const hasNegative = negativeKeywords.some(keyword => lower.includes(keyword));
+
+  if (!hasPositive && !hasNegative) return null;
+
+  // Try multiple patterns to extract the activity
+  let activity = null;
+
+  // Pattern 1: "I love [activity]"
+  const pattern1 = lower.match(/(?:i|me|my)\s+(?:love|enjoy|like|hate|dislike)\s+(?:to\s+)?([^,.!?]+)/i);
+  if (pattern1) {
+    activity = pattern1[1].trim();
+  }
+
+  // Pattern 2: "[activity] makes me feel [positive/negative]"
+  const pattern2 = lower.match(/([^,.!?]+)\s+makes\s+me\s+feel\s+(?:good|better|bad|worse)/i);
+  if (pattern2) {
+    activity = pattern2[1].trim();
+  }
+
+  // Pattern 3: "I am [verb] [activity]"
+  const pattern3 = lower.match(/(?:i|me|my)\s+(?:am|was|were)\s+(?:doing\s+)?([^,.!?]+)/i);
+  if (pattern3) {
+    activity = pattern3[1].trim();
+  }
+
+  // Pattern 4: Look for activity verbs followed by nouns
+  if (!activity) {
+    for (const verb of activityVerbs) {
+      if (lower.includes(verb)) {
+        const parts = lower.split(verb);
+        if (parts[1]) {
+          activity = parts[1].trim();
+          break;
+        }
+      }
+    }
+  }
+
+  if (activity) {
+    // Clean up the activity text
+    activity = activity.replace(/^(to|the|a|an)\s+/i, '').trim();
+    return {
+      activity,
+      isPositive: hasPositive
+    };
+  }
+
   return null;
 };
 
@@ -83,6 +162,41 @@ const saveMoodLog = async (userId, mood, note, score) => {
       score,
     }),
   });
+};
+
+const saveActivityLog = async (userId, activity, isPositive) => {
+  try {
+    await fetch(ACTIVITY_LOG_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: userId,
+        activity,
+        is_positive: isPositive,
+        date: new Date().toISOString()
+      })
+    });
+  } catch (err) {
+    console.error("Failed to save activity log:", err);
+  }
+};
+
+const saveExercise = async (userId, activity) => {
+  try {
+    await fetch(EXERCISE_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: userId,
+        name: activity,
+        type: "activity", // or you can try to infer type
+        duration: 0,
+        completed: false
+      })
+    });
+  } catch (err) {
+    console.error("Failed to save exercise:", err);
+  }
 };
 
 const saveChatLog = async (userId, message, sender) => {
@@ -146,6 +260,7 @@ const ChatbotScreen = () => {
       const userId = await AsyncStorage.getItem('user_id');
       if (userId) {
         saveChatLog(userId, inputText, "user");
+
         // Mood detection and logging
         const mood = detectMood(inputText);
         if (mood) {
@@ -154,9 +269,18 @@ const ChatbotScreen = () => {
             saveMoodLog(userId, mood, inputText, score);
           }
         }
+
+        // Activity detection and logging
+        const activityData = detectActivity(inputText);
+        if (activityData) {
+          saveActivityLog(userId, activityData.activity, activityData.isPositive);
+          if (activityData.isPositive) {
+            saveExercise(userId, activityData.activity);
+          }
+        }
       }
     } catch (err) {
-      console.error("Error getting user_id for chat log:", err);
+      console.error("Error processing user message:", err);
     }
 
     setTimeout(() => {
