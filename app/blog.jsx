@@ -438,22 +438,22 @@ const PostCard = ({
       {/* Post Actions */}
       <View style={styles.postActions}>
         <TouchableOpacity
-          style={styles.postActionButton}
+          style={[styles.postActionButton, isLiked && styles.postActionButtonActive]}
           onPress={handleLike}
         >
           <LikeIcon liked={isLiked} size={20} />
-          <Text style={styles.postActionText}>Like</Text>
+          <Text style={[styles.postActionText, isLiked && styles.postActionTextLiked]}>Like</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.postActionButton}
+          style={[styles.postActionButton, showComments && styles.postActionButtonActive]}
           onPress={toggleComments}
         >
           <CommentIcon
             size={20}
             fill={showComments}
           />
-          <Text style={styles.postActionText}>Comment</Text>
+          <Text style={[styles.postActionText, showComments && styles.postActionTextActive]}>Comment</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -472,9 +472,11 @@ const PostCard = ({
         style={[
           styles.commentsContainer,
           {
-            maxHeight: showComments ? 350 : 0,
+            maxHeight: slideAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 350]
+            }),
             opacity: slideAnim,
-            overflow: 'hidden',
           }
         ]}
       >
@@ -494,8 +496,13 @@ const PostCard = ({
             {/* Comment Input */}
             <View style={styles.commentInputContainer}>
               <Avatar
-                source={require("../assets/images/defaultProfile.png")}
+                source={
+                  imageError || !user?.profile_image
+                    ? require("../assets/images/no-profile.png")
+                    : { uri: user.profile_image }
+                }
                 size={36}
+                onError={() => setImageError(true)}
               />
               <View style={styles.commentInputWrapper}>
                 <TextInput
@@ -571,9 +578,9 @@ const CommentItem = ({ comment, onLike, isLiked }) => {
       <View style={styles.commentHeader}>
         <Avatar
           source={
-            imageError || !comment.user_profile_image
+            imageError || !comment.user_image
               ? require("../assets/images/no-profile.png")
-              : { uri: comment.user_profile_image }
+              : { uri: comment.user_image }
           }
           size={32}
           onError={() => setImageError(true)}
@@ -783,7 +790,10 @@ const BlogScreen = () => {
       const response = await fetch(`${API_URLS.POST_COMMENTS}${postId}/`);
       if (!response.ok) throw new Error("Failed to fetch comments");
       const data = await response.json();
-      setComments(data);
+      setComments(prev => ({
+        ...prev,
+        [postId]: data.comments,
+      }));
     } catch (error) {
       console.error("Error fetching comments:", error);
       Alert.alert("Error", "Failed to fetch comments");
@@ -1282,6 +1292,15 @@ const styles = StyleSheet.create({
   // Comments section styles
   commentsContainer: {
     overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+  },
+  commentsScrollView: {
+    maxHeight: 220,
+    marginTop: 8,
+  },
+  commentsScrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
   commentInputContainer: {
     flexDirection: "row",
@@ -1316,9 +1335,23 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 14,
   },
-  commentsList: {
+  commentsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    maxHeight: 300,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  commentsSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2A2E38',
+  },
+  commentsSectionHide: {
+    fontSize: 14,
+    color: '#5100F3',
+    fontWeight: '500',
   },
   noCommentsContainer: {
     alignItems: "center",
@@ -1328,6 +1361,15 @@ const styles = StyleSheet.create({
     color: "#626A7C",
     fontSize: 14,
     fontStyle: "italic",
+  },
+  moreCommentsIndicator: {
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  moreCommentsText: {
+    fontSize: 12,
+    color: '#8996A8',
+    fontStyle: 'italic',
   },
 
   // Comment item styles
@@ -1430,28 +1472,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // Comments section header styles
-  commentsSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EAEEF3",
-  },
-  commentsSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2A2E38',
-  },
-  commentsSectionHide: {
-    fontSize: 14,
-    color: '#5100F3',
-    fontWeight: '500',
-  },
-
   // New styles for simple likes and comments count
   simpleLikesContainer: {
     paddingHorizontal: 16,
@@ -1482,28 +1502,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#626A7C',
     marginHorizontal: 4,
-  },
-
-  // New styles for the scrollable comments
-  commentsScrollView: {
-    maxHeight: 220,
-    marginTop: 8,
-    position: 'relative',
-  },
-  commentsScrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-
-  // Add a subtle indicator to show there are more comments
-  moreCommentsIndicator: {
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  moreCommentsText: {
-    fontSize: 12,
-    color: '#8996A8',
-    fontStyle: 'italic',
   },
 });
 
