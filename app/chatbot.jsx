@@ -14,11 +14,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-// API configuration
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_API_KEY = "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";
-const GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+import { GROQ_API_URL, GROQ_API_KEY, GROQ_MODEL } from "./config/aiConfig";
 
 const { width } = Dimensions.get("window");
 
