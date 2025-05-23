@@ -13,6 +13,7 @@ import {
   Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // API configuration
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -21,6 +22,85 @@ const GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 
 const { width } = Dimensions.get("window");
 
+const CHAT_LOG_API_URL = "http://localhost:8000/api/add_chat_log/";
+const GET_CHAT_LOGS_API_URL = "http://localhost:8000/api/get_user_chat_logs/";
+const MOOD_LOG_API_URL = "http://localhost:8000/api/add_mood_log/";
+
+// List of moods to detect
+const moodList = [
+  "happy", "sad", "angry", "anxious", "stressed", "calm", "tired", "excited"
+];
+
+const detectMood = (text) => {
+  const lower = text.toLowerCase();
+  for (const mood of moodList) {
+    if (lower.includes(mood)) {
+      return mood;
+    }
+  }
+  return null;
+};
+
+const predictMoodScore = async (userMessage, mood) => {
+  // Use the LLM to predict the score
+  try {
+    const prompt = `Given the following user message and detected mood, predict the intensity of the mood on a scale from 1 (very mild) to 10 (very intense). Only return the number.\n\nUser message: "${userMessage}"\nDetected mood: ${mood}`;
+    const response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [
+          { role: "system", content: "You are an expert at rating mood intensity on a scale from 1 to 10. Only return the number." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.5,
+        max_tokens: 4,
+        top_p: 1
+      })
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const scoreText = data.choices[0].message.content.trim();
+    const score = parseInt(scoreText.match(/\d+/)?.[0], 10);
+    if (isNaN(score) || score < 1 || score > 10) return null;
+    return score;
+  } catch (err) {
+    console.error("Failed to predict mood score:", err);
+    return null;
+  }
+};
+
+const saveMoodLog = async (userId, mood, note, score) => {
+  if (!score) return;
+  await fetch(MOOD_LOG_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      date: new Date().toISOString(),
+      mood,
+      notes: note,
+      score,
+    }),
+  });
+};
+
+const saveChatLog = async (userId, message, sender) => {
+  try {
+    await fetch(CHAT_LOG_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, message, sender })
+    });
+  } catch (err) {
+    console.error("Failed to save chat log:", err);
+  }
+};
+
 const ChatbotScreen = () => {
   const router = useRouter();
   const [messages, setMessages] = useState([]);
@@ -28,11 +108,36 @@ const ChatbotScreen = () => {
   const [isLoading, setIsLoading] = useState(false);
   const scrollViewRef = useRef();
 
+  // Fetch chat history on mount
+  useEffect(() => {
+    const fetchChatHistory = async () => {
+      try {
+        const userId = await AsyncStorage.getItem('user_id');
+        if (!userId) return;
+        const response = await fetch(`${GET_CHAT_LOGS_API_URL}${userId}/`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (Array.isArray(data.chat_logs)) {
+          // Map logs to message format used in state
+          const historyMessages = data.chat_logs.map(log => ({
+            text: log.message,
+            sender: log.sender,
+            timestamp: log.created_at ? new Date(log.created_at) : new Date()
+          }));
+          setMessages(historyMessages);
+        }
+      } catch (err) {
+        console.error("Failed to fetch chat history:", err);
+      }
+    };
+    fetchChatHistory();
+  }, []);
+
   const handleGoBack = () => {
     router.push("/home");
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (inputText.trim() === "") return;
 
     const userMessage = { text: inputText, sender: "user", timestamp: new Date() };
@@ -40,11 +145,37 @@ const ChatbotScreen = () => {
     setInputText("");
     setIsLoading(true);
 
-    // Using a timeout to make sure the state update happens before the async call
+    // Save user message to chat log
+    try {
+      const userId = await AsyncStorage.getItem('user_id');
+      if (userId) {
+        saveChatLog(userId, inputText, "user");
+        // Mood detection and logging
+        const mood = detectMood(inputText);
+        if (mood) {
+          const score = await predictMoodScore(inputText, mood);
+          if (score) {
+            saveMoodLog(userId, mood, inputText, score);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error getting user_id for chat log:", err);
+    }
+
     setTimeout(() => {
       fetchBotReply(inputText)
-        .then(botReply => {
+        .then(async botReply => {
           setMessages(prevMessages => [...prevMessages, botReply]);
+          // Save bot message to chat log
+          try {
+            const userId = await AsyncStorage.getItem('user_id');
+            if (userId) {
+              saveChatLog(userId, botReply.text, "bot");
+            }
+          } catch (err) {
+            console.error("Error getting user_id for chat log:", err);
+          }
         })
         .catch(error => {
           Alert.alert("Error", error.message);
@@ -59,16 +190,22 @@ const ChatbotScreen = () => {
   const fetchBotReply = async (userInput) => {
     try {
       // Prepare conversation history for the model
-      const messageHistory = messages.map(msg => ({
-        role: msg.sender === "user" ? "user" : "assistant",
-        content: msg.text
-      }));
+      const systemPrompt = {
+        role: "system",
+        content: "You are a compassionate and professional CBT (Cognitive Behavioral Therapy) therapist. Respond to the user using CBT techniques, such as Socratic questioning, cognitive restructuring, and behavioral activation. Keep your responses concise and focused, and ask no more than 2 questions in each reply. Wait for the user's answer before moving to the next step. Help the user identify and challenge unhelpful thoughts, and encourage practical steps for well-being. Always be supportive, non-judgmental, and evidence-based."
+      };
 
-      // Add the new user message
-      messageHistory.push({
-        role: "user",
-        content: userInput
-      });
+      const messageHistory = [
+        systemPrompt,
+        ...messages.map(msg => ({
+          role: msg.sender === "user" ? "user" : "assistant",
+          content: msg.text
+        })),
+        {
+          role: "user",
+          content: userInput
+        }
+      ];
 
       // Call Groq API using fetch
       const response = await fetch(GROQ_API_URL, {
