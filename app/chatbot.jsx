@@ -51,6 +51,11 @@ const activityVerbs = [
   "yoga", "stretching", "lifting", "cycling", "hiking", "climbing"
 ];
 
+// List of common sports/activities
+const knownActivities = [
+  "running", "basketball", "chess", "tennis", "kayaking", "swimming", "cycling", "yoga", "meditation", "soccer", "football", "baseball", "volleyball", "hiking", "dancing", "skiing", "surfing", "climbing", "golf", "boxing", "skating", "rowing", "badminton", "table tennis", "ping pong", "rugby", "cricket", "handball", "squash", "martial arts", "pilates", "stretching", "jogging", "walking"
+];
+
 const detectMood = (text) => {
   const lower = text.toLowerCase();
   for (const mood of moodList) {
@@ -70,28 +75,35 @@ const detectActivity = (text) => {
 
   if (!hasPositive && !hasNegative) return null;
 
-  // Try multiple patterns to extract the activity
-  let activity = null;
+  // Always scan the entire message for any known activity
+  let detected = null;
+  for (const activity of knownActivities) {
+    if (lower.includes(activity)) {
+      detected = activity;
+      break;
+    }
+  }
+  if (detected) {
+    return {
+      activity: detected.charAt(0).toUpperCase() + detected.slice(1),
+      isPositive: hasPositive
+    };
+  }
 
-  // Pattern 1: "I love [activity]"
+  // Fallback to previous extraction logic
+  let activity = null;
   const pattern1 = lower.match(/(?:i|me|my)\s+(?:love|enjoy|like|hate|dislike)\s+(?:to\s+)?([^,.!?]+)/i);
   if (pattern1) {
     activity = pattern1[1].trim();
   }
-
-  // Pattern 2: "[activity] makes me feel [positive/negative]"
   const pattern2 = lower.match(/([^,.!?]+)\s+makes\s+me\s+feel\s+(?:good|better|bad|worse)/i);
   if (pattern2) {
     activity = pattern2[1].trim();
   }
-
-  // Pattern 3: "I am [verb] [activity]"
   const pattern3 = lower.match(/(?:i|me|my)\s+(?:am|was|were)\s+(?:doing\s+)?([^,.!?]+)/i);
   if (pattern3) {
     activity = pattern3[1].trim();
   }
-
-  // Pattern 4: Look for activity verbs followed by nouns
   if (!activity) {
     for (const verb of activityVerbs) {
       if (lower.includes(verb)) {
@@ -103,16 +115,23 @@ const detectActivity = (text) => {
       }
     }
   }
-
   if (activity) {
-    // Clean up the activity text
     activity = activity.replace(/^(to|the|a|an)\s+/i, '').trim();
-    return {
-      activity,
-      isPositive: hasPositive
-    };
+    const firstWord = activity.split(/\s|,|\.|!|\?/)[0];
+    // Ignore pronouns as activity names
+    const ignoreWords = ["it", "this", "that", "they", "he", "she", "we", "you"];
+    if (knownActivities.includes(firstWord)) {
+      return {
+        activity: firstWord.charAt(0).toUpperCase() + firstWord.slice(1),
+        isPositive: hasPositive
+      };
+    } else if (!ignoreWords.includes(firstWord)) {
+      return {
+        activity: activity.charAt(0).toUpperCase() + activity.slice(1),
+        isPositive: hasPositive
+      };
+    }
   }
-
   return null;
 };
 
@@ -162,23 +181,6 @@ const saveMoodLog = async (userId, mood, note, score) => {
       score,
     }),
   });
-};
-
-const saveActivityLog = async (userId, activity, isPositive) => {
-  try {
-    await fetch(ACTIVITY_LOG_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: userId,
-        activity,
-        is_positive: isPositive,
-        date: new Date().toISOString()
-      })
-    });
-  } catch (err) {
-    console.error("Failed to save activity log:", err);
-  }
 };
 
 const saveExercise = async (userId, activity) => {
@@ -272,11 +274,8 @@ const ChatbotScreen = () => {
 
         // Activity detection and logging
         const activityData = detectActivity(inputText);
-        if (activityData) {
-          saveActivityLog(userId, activityData.activity, activityData.isPositive);
-          if (activityData.isPositive) {
-            saveExercise(userId, activityData.activity);
-          }
+        if (activityData && activityData.isPositive) {
+          saveExercise(userId, activityData.activity);
         }
       }
     } catch (err) {

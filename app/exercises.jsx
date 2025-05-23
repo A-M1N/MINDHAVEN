@@ -164,7 +164,7 @@ const ExerciseScreen = () => {
                             >
                                 <View style={styles.exerciseContent}>
                                     <View style={styles.exerciseHeader}>
-                                        <Text style={styles.exerciseTitle}>{exercise.title}</Text>
+                                        <Text style={styles.exerciseTitle}>{capitalize(exercise.title)}</Text>
                                         <Text style={styles.exerciseDuration}>{exercise.duration}</Text>
                                     </View>
                                     <Text style={styles.exerciseDescription}>{exercise.description}</Text>
