@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { FontAwesome } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Mock data for previous mood entries
 const previousMoodData = [
@@ -51,13 +52,59 @@ const moodOptions = [
     { emoji: "😴", label: "Tired" }
 ];
 
+const MOOD_API_URL = "http://127.0.0.1:8000/api/add_mood_log/";
+const MOOD_HISTORY_API_URL = "http://127.0.0.1:8000/api/get_user_mood_logs/";
+
 const MoodTrackerScreen = () => {
     const router = useRouter();
     const [selectedMood, setSelectedMood] = useState(null);
     const [intensity, setIntensity] = useState(5);
     const [note, setNote] = useState("");
-    const [moodEntries, setMoodEntries] = useState(previousMoodData);
+    const [moodEntries, setMoodEntries] = useState([]);
     const [activeTab, setActiveTab] = useState("new"); // "new" or "history"
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        if (activeTab === "history") {
+            fetchMoodHistory();
+        }
+    }, [activeTab]);
+
+    const fetchMoodHistory = async () => {
+        try {
+            const userId = await AsyncStorage.getItem('user_id');
+            if (!userId) {
+                Alert.alert('Error', 'User not logged in');
+                router.push("/login");
+                return;
+            }
+
+            setIsLoading(true);
+            const response = await fetch(`${MOOD_HISTORY_API_URL}${userId}/`);
+            const data = await response.json();
+
+            if (response.ok && data.mood_logs) {
+                setMoodEntries(data.mood_logs.map(entry => ({
+                    id: entry._id,
+                    date: new Date(entry.date).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric"
+                    }),
+                    mood: entry.mood,
+                    intensity: entry.score,
+                    note: entry.notes
+                })));
+            } else {
+                Alert.alert('Error', data.error || 'Failed to fetch mood history');
+            }
+        } catch (err) {
+            console.error("Error fetching mood history:", err);
+            Alert.alert('Error', 'Failed to fetch mood history');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const handleGoBack = () => {
         router.push("/home");
@@ -71,29 +118,52 @@ const MoodTrackerScreen = () => {
         setIntensity(value);
     };
 
-    const handleSaveMood = () => {
+    const handleSaveMood = async () => {
         if (!selectedMood) {
             Alert.alert("Missing Information", "Please select a mood before saving.");
             return;
         }
 
-        const newEntry = {
-            id: Date.now(),
-            date: new Date().toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric"
-            }),
-            mood: selectedMood.label,
-            intensity,
-            note
-        };
+        try {
+            const userId = await AsyncStorage.getItem('user_id');
+            if (!userId) {
+                Alert.alert('Error', 'User not logged in');
+                router.push("/login");
+                return;
+            }
 
-        setMoodEntries([newEntry, ...moodEntries]);
-        Alert.alert("Success", "Your mood has been recorded!");
-        setSelectedMood(null);
-        setIntensity(5);
-        setNote("");
+            const payload = {
+                user_id: userId,
+                date: new Date().toISOString(),
+                mood: selectedMood.label,
+                score: intensity,
+                notes: note,
+            };
+
+            const response = await fetch(MOOD_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                Alert.alert('Success', 'Your mood has been recorded and saved!');
+                setSelectedMood(null);
+                setIntensity(5);
+                setNote("");
+
+                // Refresh mood history if we're on the history tab
+                if (activeTab === "history") {
+                    fetchMoodHistory();
+                }
+            } else {
+                Alert.alert('Error', data.error || 'Failed to save mood');
+            }
+        } catch (err) {
+            console.error("Error saving mood:", err);
+            Alert.alert('Error', 'Failed to save mood');
+        }
     };
 
     return (
@@ -204,24 +274,35 @@ const MoodTrackerScreen = () => {
                         // History View
                         <View style={styles.historyContainer}>
                             <Text style={styles.historyTitle}>Your Mood History</Text>
-                            {moodEntries.map((entry) => (
-                                <View key={entry.id} style={styles.historyCard}>
-                                    <View style={styles.historyCardHeader}>
-                                        <Text style={styles.historyDate}>{entry.date}</Text>
-                                        <View style={styles.moodBadge}>
-                                            <Text style={styles.moodBadgeText}>{entry.mood}</Text>
-                                            <Text style={styles.intensityBadge}>
-                                                {entry.intensity}/10
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    {entry.note ? (
-                                        <Text style={styles.historyNote}>{entry.note}</Text>
-                                    ) : (
-                                        <Text style={styles.noNote}>No notes added</Text>
-                                    )}
+                            {isLoading ? (
+                                <View style={styles.loadingContainer}>
+                                    <Text style={styles.loadingText}>Loading your mood history...</Text>
                                 </View>
-                            ))}
+                            ) : moodEntries.length === 0 ? (
+                                <View style={styles.emptyContainer}>
+                                    <Text style={styles.emptyText}>No mood entries yet</Text>
+                                    <Text style={styles.emptySubText}>Start tracking your mood by adding a new entry</Text>
+                                </View>
+                            ) : (
+                                moodEntries.map((entry) => (
+                                    <View key={entry.id} style={styles.historyCard}>
+                                        <View style={styles.historyCardHeader}>
+                                            <Text style={styles.historyDate}>{entry.date}</Text>
+                                            <View style={styles.moodBadge}>
+                                                <Text style={styles.moodBadgeText}>{entry.mood}</Text>
+                                                <Text style={styles.intensityBadge}>
+                                                    {entry.intensity}/10
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        {entry.note ? (
+                                            <Text style={styles.historyNote}>{entry.note}</Text>
+                                        ) : (
+                                            <Text style={styles.noNote}>No notes added</Text>
+                                        )}
+                                    </View>
+                                ))
+                            )}
                         </View>
                     )}
                 </ScrollView>
@@ -458,7 +539,33 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: "#94a3b8",
         fontStyle: "italic",
-    }
+    },
+    loadingContainer: {
+        padding: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    loadingText: {
+        fontSize: 16,
+        color: '#64748b',
+        textAlign: 'center',
+    },
+    emptyContainer: {
+        padding: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    emptyText: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1e293b',
+        marginBottom: 8,
+    },
+    emptySubText: {
+        fontSize: 14,
+        color: '#64748b',
+        textAlign: 'center',
+    },
 });
 
 export default MoodTrackerScreen; 
